@@ -1,10 +1,13 @@
 pipeline {
     agent any
 
+    environment {
+        GITHUB_TOKEN = credentials('github')
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                // Checkout the code from the repository
                 script {
                     checkout scm
                 }
@@ -13,30 +16,46 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // Set up Python environment and install dependencies
                 script {
                     sh 'python3 -m venv appenv'
                     sh '. appenv/bin/activate && pip install -r requirements.txt'
-                    // Set an environment variable to hold the virtual environment path
-                    env.VIRTUAL_ENV = "${WORKSPACE}/appenv"
                 }
             }
         }
 
         stage('Run Tests') {
             steps {
-                // Run FastAPI tests
                 script {
-                    sh ". ${env.VIRTUAL_ENV}/bin/activate && pytest"
+                    sh 'python -m pytest --junit-xml=test-results.xml'
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('GitHub Checks') {
             steps {
-                // Deploy your FastAPI app (You can customize this based on your deployment strategy)
                 script {
-                   sh ". ${env.VIRTUAL_ENV}/bin/activate && python app.py"
+                    def GITHUB_API_URL = 'https://api.github.com'
+                    def GITHUB_REPO = 'sc-govsin/sample-flask'
+                    def GIT_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+
+                    // Report test results to GitHub as a check run
+                    sh """
+                        curl -X POST \
+                        -u sc-govsin:${GITHUB_TOKEN} \
+                        -H 'Accept: application/vnd.github.v3+json' \
+                        -d '{
+                            "name": "Jenkins",
+                            "head_sha": "${GIT_COMMIT}",
+                            "status": "completed",
+                            "conclusion": "success",
+                            "output": {
+                                "title": "Jenkins Tests",
+                                "summary": "All tests passed!",
+                                "text": "Check the Jenkins logs for more details."
+                            }
+                        }' \
+                        ${GITHUB_API_URL}/repos/${GITHUB_REPO}/check-runs
+                    """
                 }
             }
         }
@@ -44,11 +63,9 @@ pipeline {
 
     post {
         success {
-            // Additional actions to take on successful build
             echo 'Build successful!'
         }
         failure {
-            // Additional actions to take on build failure
             echo 'Build failed!'
         }
     }
