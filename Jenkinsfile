@@ -17,6 +17,8 @@ pipeline {
                 script {
                     sh 'python3 -m venv appenv'
                     sh '. appenv/bin/activate && pip install -r requirements.txt'
+                    // Set an environment variable to hold the virtual environment path
+                    env.VIRTUAL_ENV = "${WORKSPACE}/appenv"
                 }
             }
         }
@@ -25,7 +27,7 @@ pipeline {
             steps {
                 // Run FastAPI tests
                 script {
-                    sh 'pytest'
+                    sh ". ${env.VIRTUAL_ENV}/bin/activate && pytest"
                 }
             }
         }
@@ -34,7 +36,7 @@ pipeline {
             steps {
                 // Deploy your FastAPI app (You can customize this based on your deployment strategy)
                 script {
-                    sh 'python app.py'
+                   sh ". ${env.VIRTUAL_ENV}/bin/activate && python app.py"
                 }
             }
         }
